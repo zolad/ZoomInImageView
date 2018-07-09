@@ -3,23 +3,31 @@ package com.example.zhonghm.opengllearnproject;
 import android.app.Activity;
 import android.content.Context;
 import android.graphics.Bitmap;
+import android.graphics.Color;
 import android.graphics.Matrix;
 import android.graphics.PixelFormat;
 import android.graphics.Rect;
 import android.util.AttributeSet;
 import android.util.Log;
+import android.view.GestureDetector;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
+import android.view.ScaleGestureDetector;
 import android.view.View;
 import android.view.ViewTreeObserver;
 import android.view.WindowManager;
+import android.view.animation.Interpolator;
 import android.widget.ImageView;
+
+import com.example.zhonghm.opengllearnproject.animation.AnimCompat;
+import com.example.zhonghm.opengllearnproject.animation.SpringInterpolator;
+import com.zolad.zoominimageview.R;
 
 /**
  * Created by zhonghm on 2018/6/27.
  */
 
-public class TestImageView extends ImageView {
+public class ZoomInImageView extends ImageView {
 
     private WindowManager mWindowManager;
     /**
@@ -34,218 +42,259 @@ public class TestImageView extends ImageView {
      * 选中的item的镜像Bitmap
      */
     private Bitmap mBitmap;
-    /**
-     * 按下的点到所在item的上边缘的距离
-     */
-    private int mPoint2ItemTop;
-
-    /**
-     * 按下的点到所在item的左边缘的距离
-     */
-    private int mPoint2ItemLeft;
 
     /**
      * CanDragListView距离屏幕顶部的偏移量
      */
-    private int mOffset2Top;
-    /**
-     * CanDragListView自动向下滚动的边界值
-     */
-    private int mDownScrollBorder;
+    private int mOffsetToTop;
 
-    /**
-     * CanDragListView自动向上滚动的边界值
-     */
-    private int mUpScrollBorder;
-    /**
-     * CanDragListView自动滚动的速度
-     */
-    private static final int speed = 20;
 
     /**
      * CanDragListView距离屏幕左边的偏移量
      */
-    private int mOffset2Left;
-    /**
-     * 状态栏的高度
-     */
-    private int mStatusHeight;
-    /**
-     * 按下的系统时间
-     */
-    private long mActionDownTime = 0;
-    /**
-     * 移动的系统时间
-     */
-    private long mActionMoveTime = 0;
-    /**
-     * 默认长按事件时间是1000毫秒
-     */
-    private long mLongClickTime = 1000;
+    private int mOffsetToLeft;
+
+
     /**
      * 是否可拖拽，默认为false
      */
-    private boolean isDrag = false;
+    private boolean mZoomEnabled;
+
     /**
-     * 按下是的x坐标
+     * 图片缩放手势
      */
-    private int mDownX;
-    /**
-     * 按下是的y坐标
-     */
-    private int mDownY;
+    private ScaleGestureDetector mScaleGesture;
+
+    int ZOOM_DURATION = 1000;
+
+    private View mWindowLayout;
+    private Matrix mSuppMatrix = new Matrix();
+
+    private Interpolator mAnimInterpolator = new SpringInterpolator(1f);
+
+    private GestureDetector mGesture;
 
 
-    public TestImageView(Context context) {
+    public void setZoomReleaseAnimInterpolator(Interpolator animInterpolator) {
+
+        if (animInterpolator != null)
+            this.mAnimInterpolator = animInterpolator;
+    }
+
+    public void setZoomReleaseAnimDuration(int duration) {
+
+        if (duration > 0)
+            this.ZOOM_DURATION = duration;
+    }
+
+
+    public void setZoomable(boolean zoomable) {
+        mZoomEnabled = zoomable;
+
+    }
+
+
+    public ZoomInImageView(Context context) {
         super(context);
-        mWindowManager = (WindowManager) context.getSystemService(Context.WINDOW_SERVICE);
-        mStatusHeight = getStatusHeight(context);
-        //super.setScaleType(ScaleType.MATRIX);
+
     }
 
-    public TestImageView(Context context, AttributeSet attrs) {
-        super(context, attrs);
-        mWindowManager = (WindowManager) context.getSystemService(Context.WINDOW_SERVICE);
-        mStatusHeight = getStatusHeight(context);
-        //super.setScaleType(ScaleType.MATRIX);
+    public ZoomInImageView(Context context, AttributeSet attrs) {
+        this(context, attrs, 0);
+
     }
 
 
-    public TestImageView(Context context, AttributeSet attrs, int defStyleAttr) {
+    public ZoomInImageView(Context context, AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
         mWindowManager = (WindowManager) context.getSystemService(Context.WINDOW_SERVICE);
-        mStatusHeight = getStatusHeight(context);
-       // super.setScaleType(ScaleType.MATRIX);
+
+        setListenr();
+
+
     }
-    @Override
-    public boolean dispatchTouchEvent(MotionEvent ev) {
-        // if (getCurrentItem() != 0) {
-        getParent().requestDisallowInterceptTouchEvent(true);// 用getParent去请求,
-        // 不拦截
-//        } else {// 如果是第一个页面, 请求父控件拦截
-//            getParent().requestDisallowInterceptTouchEvent(false);// 拦截
-//        }
-        return super.dispatchTouchEvent(ev);
-    }
-    @Override
-    public boolean onTouchEvent(MotionEvent event) {
+
+    float disx = 0f;
+    float disy = 0f;
+    float mCurrentScale = 1f;
+
+    public void setListenr() {
 
 
-        Log.e("motion", event.getAction() + " " + event.getX() + event.getY());
+        // setOnTouchListener(this);
 
-        switch (event.getAction()) {
-            case MotionEvent.ACTION_DOWN:
-                mActionDownTime = event.getDownTime();
-                mDownX = (int) event.getX();
-                mDownY = (int) event.getY();
-
-//                // 根据按下的坐标获取item对应的position
-//                mSelectedPosition = pointToPosition(mDownX, mDownY);
-//                // 如果是无效的position，即值为-1
-//                if (mSelectedPosition == AdapterView.INVALID_POSITION) {
-//                    return super.onTouchEvent(event);
-//                }
-//                // 根据position获取对应的item
-//                mItemView = getChildAt(mSelectedPosition - getFirstVisiblePosition());
-//                // 使用Handler延迟mLongClickTime执行mLongClickRunnable
-//                mHandler.post(mLongClickRunnable);//, mLongClickTime);
-//
+        mScaleGesture = new ScaleGestureDetector(this.getContext(), new ScaleGestureDetector.OnScaleGestureListener() {
 
 
-                //// TODO: 2018/6/27
+            private float scaleTemp = 1;
+            private float LastX = 0;
+            private float LastY = 0;
 
 
-                // 下面这几个距离大家可以参考我的博客上面的图来理解下
-                mPoint2ItemTop = mDownY;//- this.getTop();
-                mPoint2ItemLeft = mDownX;// - this.getLeft();
+            @Override
+            public boolean onScale(ScaleGestureDetector detector) {
 
-                mOffset2Top = (int) (event.getRawY() - mDownY);
-                mOffset2Left = (int) (event.getRawX() - mDownX);
+                //    TestImageView.this.setVisibility(View.INVISIBLE);// 隐藏该item
 
-                // 获取CanDragListView自动向上滚动的偏移量，小于这个值，CanDragListView向下滚动
-                mDownScrollBorder = getHeight() / 4;
-                // 获取CanDragListView自动向下滚动的偏移量，大于这个值，CanDragListView向上滚动
-                mUpScrollBorder = getHeight() * 3 / 4;
+                if (mDragIV == null) {
 
-                // 将该item进行绘图缓存
-                this.setDrawingCacheEnabled(true);
-                // 从缓存中获取bitmap
-                mBitmap = Bitmap.createBitmap(this.getDrawingCache());
-                // 释放绘图缓存，避免出现重复的缓存对象
-                this.destroyDrawingCache();
-                showIv();
-
-                // Log.i("CanDragListView", "****"+isDrag);
-                break;
-            case MotionEvent.ACTION_MOVE:
-                // TODO
-                if (isDrag) {
-                    int moveX = (int) event.getX();
-                    int moveY = (int) event.getY();
-//                    if (!isOnTouchInItem(mItemView, moveX, moveY)) {
-//                        mHandler.removeCallbacks(mLongClickRunnable);
-//                    }
-                    mDownX = moveX;
-                    mDownY = moveY;
-                    onDragItem(moveX, moveY);
+                    scaleTemp = detector.getScaleFactor();
+                    return false;
                 }
-                break;
-            case MotionEvent.ACTION_UP:
-                onStopDrag();
-//                mHandler.removeCallbacks(mLongClickRunnable);
-//                mHandler.removeCallbacks(mScrollRunnable);
+                mCurrentScale = detector.getScaleFactor() * (1f / scaleTemp);
+                float tx = detector.getFocusX();
+                float ty = detector.getFocusY();
+                Log.e("ivd", "scale" + mCurrentScale + "position" + detector.getFocusX() + " xy " + detector.getFocusY() + "   move" +
 
-                isDrag = false;
-                break;
-            case MotionEvent.ACTION_CANCEL:
-                onStopDrag();
-//                mHandler.removeCallbacks(mLongClickRunnable);
-//                mHandler.removeCallbacks(mScrollRunnable);
+                        (tx - LastX) + " xy" + (ty - LastY)
+                );
 
-                isDrag = false;
-                break;
-            default:
-                break;
-        }
 
-        //super.onTouchEvent(event)
-        return true;
+                mSuppMatrix.reset();
+
+
+                float cx = mOffsetToLeft + mBitmap.getWidth() / 2.0f;
+                float cy = mOffsetToTop + mBitmap.getHeight() / 2.0f;
+                if (mCurrentScale >= 1.0) {
+                    mSuppMatrix.postScale(mCurrentScale, mCurrentScale, cx, cy);
+
+
+                } else {
+                    mCurrentScale = 1;
+                    mSuppMatrix.postScale(1, 1, cx, cy);
+
+                }
+                disx = tx - LastX;
+                disy = ty - LastY;
+                mSuppMatrix.postTranslate(disx, disy);
+                //  mSuppMatrix.postScale(scale, scale);
+                mDrawMatrix.set(mBaseMatrix);
+                mDrawMatrix.postConcat(mSuppMatrix);
+
+
+                if (mWindowLayout != null) {
+                    if (mCurrentScale >= 1.0) {
+
+                        if (mCurrentScale > 3.0) {
+                            mWindowLayout.setBackgroundColor(Color.argb((int) 200, 0, 0, 0));
+                        } else {
+                            mWindowLayout.setBackgroundColor(Color.argb((int) (200 * (mCurrentScale - 1.0) / 2.0f), 0, 0, 0));
+                        }
+                    } else {
+                        mWindowLayout.setBackgroundColor(Color.argb(0, 0, 0, 0));
+                    }
+
+                }
+
+                mDragIV.setImageMatrix(mDrawMatrix);
+
+
+                return false;
+            }
+
+            @Override
+            public boolean onScaleBegin(ScaleGestureDetector detector) {
+                Log.e("ivd", "scale begin" + detector.getScaleFactor());
+                LastX = detector.getFocusX();
+                LastY = detector.getFocusY();
+
+                disx = 0;
+                disy = 0;
+                //  if(detector.getScaleFactor()>1.0) {
+                scaleTemp = detector.getScaleFactor();
+
+                ZoomInImageView.this.setDrawingCacheEnabled(true);
+                // 从缓存中获取bitmap
+                mBitmap = Bitmap.createBitmap(ZoomInImageView.this.getDrawingCache());
+                // 释放绘图缓存，避免出现重复的缓存对象
+                ZoomInImageView.this.destroyDrawingCache();
+
+
+                showIv();
+                //   }
+                return true;
+            }
+
+            @Override
+            public void onScaleEnd(ScaleGestureDetector detector) {
+                scaleTemp = detector.getScaleFactor();
+
+                //  getParent().requestDisallowInterceptTouchEvent(false);
+                onReleaseZoom();
+                Log.e("ivd", "scale end");
+            }
+
+
+        });
+        mGesture = new GestureDetector(this.getContext(), new GestureDetector.OnGestureListener() {
+
+
+            @Override
+            public boolean onDown(MotionEvent e) {
+                return false;
+            }
+
+            @Override
+            public void onShowPress(MotionEvent e) {
+
+            }
+
+            @Override
+            public boolean onSingleTapUp(MotionEvent e) {
+                performClick();
+                return false;
+            }
+
+            @Override
+            public boolean onScroll(MotionEvent e1, MotionEvent e2, float distanceX, float distanceY) {
+                return false;
+            }
+
+            @Override
+            public void onLongPress(MotionEvent e) {
+                performLongClick();
+            }
+
+            @Override
+            public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
+                return false;
+            }
+        });
+
+
     }
 
-    /**
-     * 拖动item，在里面实现了item镜像的位置更新，item的相互交换以及ListView的自行滚动
-     */
-    private void onDragItem(int moveX, int moveY) {
-//        if (mWindowLayoutParams != null && mDragIV != null) {
-//            mWindowLayoutParams.x = moveX - mPoint2ItemLeft + mOffset2Left;
-//            mWindowLayoutParams.y = moveY - mPoint2ItemTop + mOffset2Top - mStatusHeight;
-//
-//
-            Matrix mDrawMatrix = new Matrix();
-            mDrawMatrix.postTranslate( moveX,moveY);
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent event) {
 
-            mDragIV.setImageMatrix(mDrawMatrix);
-//
-//         //   mDragIV.setImageAlpha(150);
-//
-//         //   mWindowManager.updateViewLayout(mDragIV, mWindowLayoutParams); // 更新镜像的位置
-//        }
-        //onSwapItem(moveX, moveY);
-        // ListView自动滚动
-        //mHandler.post(mScrollRunnable);
 
+        if (event.getPointerCount() >= 2) {
+
+            //if touch by more than two finger  ,handle by itself
+            getParent().requestDisallowInterceptTouchEvent(true);
+
+        } else {
+            getParent().requestDisallowInterceptTouchEvent(false);
+
+
+        }
+
+        return super.dispatchTouchEvent(event);
     }
 
-    /**
-     * 停止拖拽我们将之前隐藏的item显示出来，并将镜像移除
-     */
-    private void onStopDrag() {
 
-        if (this != null) {
-            this.setVisibility(View.VISIBLE);
+    /**
+     * On  release zoom
+     */
+    private void onReleaseZoom() {
+
+
+        if (mDragIV != null) {
+            float cx = mOffsetToLeft + mBitmap.getWidth() / 2.0f;
+            float cy = mOffsetToTop + mBitmap.getHeight() / 2.0f;
+            mDragIV.post(new AnimatedZoomRunnable(getScale(), 1,
+                    cx, cy, disx, disy));
         }
-        // ((DragAdapter)this.getAdapter()).setItemHide(-1);
-        removeDragImage();
     }
 
 
@@ -254,24 +303,25 @@ public class TestImageView extends ImageView {
      */
     private void removeDragImage() {
         if (mDragIV != null) {
-            mWindowManager.removeView(mLayout);
+            mWindowManager.removeView(mWindowLayout);
             mDragIV = null;
         }
 
     }
 
+    Matrix mBaseMatrix = new Matrix();
 
     public void showIv() {
 
-        isDrag = true; // 设置可以拖拽
+        //isDrag = true; // 设置可以拖拽
 //            mVibrator.vibrate(100); // 震动100毫秒
 
         Log.i("CanDragListView", "**mLongClickRunnable**");
         // 根据我们按下的点显示item镜像
-        createDragImage(mBitmap, mDownX, mDownY);
+        createDragImage(mBitmap, mOffsetToLeft, mOffsetToTop);
 
     }
-    View mLayout;
+
 
     /**
      * 创建拖动的镜像
@@ -284,147 +334,80 @@ public class TestImageView extends ImageView {
         mWindowLayoutParams = new WindowManager.LayoutParams();
         mWindowLayoutParams.format = PixelFormat.RGBA_8888; // 图片之外的其他地方透明
 
-//        mWindowLayoutParams.gravity = Gravity.TOP | Gravity.LEFT;
-//        mWindowLayoutParams.x = downX;// - mPoint2ItemLeft + mOffset2Left;
-//        mWindowLayoutParams.y = downY;// - mPoint2ItemTop + mOffset2Top - mStatusHeight;
-//        mWindowLayoutParams.x =0;
-//        mWindowLayoutParams.y = 0;
-        mWindowLayoutParams.alpha = 0.55f; // 透明度  0.55
+
+        mWindowLayoutParams.alpha = 1f; // 透明度  0.55
         mWindowLayoutParams.width = WindowManager.LayoutParams.MATCH_PARENT;
         mWindowLayoutParams.height = WindowManager.LayoutParams.MATCH_PARENT;
 
 
         mWindowLayoutParams.type = WindowManager.LayoutParams.TYPE_TOAST;
-        mWindowLayoutParams.flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
-
-;
-      //  mWindowLayoutParams.
 
 
-//        mNewWindowLayoutParams = new WindowManager.LayoutParams();
-//        mNewWindowLayoutParams.format = PixelFormat.RGB_565; // 图片之外的其他地方透明
-//        mNewWindowLayoutParams.gravity = Gravity.TOP | Gravity.LEFT;
-//        mNewWindowLayoutParams.x = downX - mPoint2ItemLeft + mOffset2Left;
-//        mNewWindowLayoutParams.y = downY - mPoint2ItemTop + mOffset2Top - mStatusHeight;
-//        // mNewWindowLayoutParams.alpha = 0.55f; // 透明度
-//        mNewWindowLayoutParams.width = WindowManager.LayoutParams.WRAP_CONTENT;
-//        mNewWindowLayoutParams.height = WindowManager.LayoutParams.WRAP_CONTENT;
-//        mNewWindowLayoutParams.flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE;
+        mWindowLayout = LayoutInflater.from(this.getContext()).inflate(R.layout., null);
 
-        mLayout =  LayoutInflater.from(this.getContext()).inflate(R.layout.layout_image, null);
+        mWindowLayout.setClickable(true);
 
-
-
-
-
-
-        mDragIV = (ImageView) mLayout.findViewById(R.id.iv_pic);
+        mDragIV = (ImageView) mWindowLayout.findViewById(R.id.iv_pic);
         mDragIV.setImageBitmap(bitmap);
-      Matrix mSuppMatrix = new Matrix();
-        //  mSuppMatrix.postTranslate(downX - mPoint2ItemLeft + mOffset2Left, downY - mPoint2ItemTop + mOffset2Top - mStatusHeight);
 
-     // mSuppMatrix.postRotate(90);
 
-        Matrix mBaseMatrix = new Matrix();
 
         mBaseMatrix.reset();
-        Log.e("checksum",downX+" "+
-                downY+"  "+
-                mPoint2ItemTop+" "+
-                mPoint2ItemLeft+" "+
-                mOffset2Top+" "+
-                mOffset2Left+" "
+        Log.e("checksum", downX + " " +
+                downY + "  " +
+                mOffsetToTop + " " +
+                mOffsetToLeft + " "
         );
 
-        Log.e("checksum",(getWidth() - bitmap.getWidth()) / 2F+"  "+
-                (getHeight() - bitmap.getHeight()) / 2F + "  "+
-                getX()+" "+
-                getY()+" "+
-                getPivotX() +" "+
-                getPivotY()+" "+
-                getTranslationX() +" "+
+        Log.e("checksum", (getWidth() - bitmap.getWidth()) / 2F + "  " +
+                (getHeight() - bitmap.getHeight()) / 2F + "  " +
+                getX() + " " +
+                getY() + " " +
+                getPivotX() + " " +
+                getPivotY() + " " +
+                getTranslationX() + " " +
                 getTranslationY()
         );
 
+        mSuppMatrix.reset();
+        mBaseMatrix.postTranslate(mOffsetToLeft,
+                mOffsetToTop - getStatusHeight(this.getContext()));
 
-        mBaseMatrix.postTranslate(mOffset2Left,
-                mOffset2Top-getStatusHeight(this.getContext()));
-//        RectF mTempSrc = new RectF(0, 0, bitmap.getWidth(), bitmap.getHeight());
-//        RectF mTempDst = new RectF(0, 0, getImageViewWidth(mDragIV), getImageViewHeight(mDragIV));
-//        mBaseMatrix
-//               .setRectToRect(mTempSrc,mTempDst, Matrix.ScaleToFit.FILL);
-
-        Matrix  mDrawMatrix = new Matrix();
         mDrawMatrix.set(mBaseMatrix);
-      //  mDrawMatrix.postConcat(mSuppMatrix);
 
         mDragIV.setScaleType(ScaleType.MATRIX);
 
         mDragIV.setImageMatrix(mDrawMatrix);
 
 
-       // mDragIV.invalidate();
 
 
-        mDragIV.getViewTreeObserver().addOnDrawListener(new ViewTreeObserver.OnDrawListener() {
-            @Override
-            public void onDraw() {
-                // TODO Auto-generated method stub
-                Log.e("motion222","drag2view draw finish");
 
-                if (TestImageView.this != null) {
-                    TestImageView.this.setVisibility(View.INVISIBLE);// 隐藏该item
-                }
-            }
-        });
-
-        mLayout.getViewTreeObserver().addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener() {
+        mWindowLayout.getViewTreeObserver().addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener() {
             @Override
             public void onGlobalLayout() {
-                Log.e("motion222","drag2view draw finish22");
-                if (TestImageView.this != null) {
-                    TestImageView.this.postDelayed(new Runnable() {
+
+                if (ZoomInImageView.this != null) {
+                    ZoomInImageView.this.postDelayed(new Runnable() {
                         @Override
                         public void run() {
-                          TestImageView.this.setVisibility(View.INVISIBLE);// 隐藏该item
+                            ZoomInImageView.this.setVisibility(View.INVISIBLE);// 隐藏该item
                         }
-                    },100);
+                    }, 100);
 
                 }
             }
         });
 
-//        postDelayed(new Runnable() {
-//            @Override
-//            public void run() {
-//
-//            }
-//        },500)
-        mWindowManager.addView(mLayout, mWindowLayoutParams);
 
-//        ViewTreeObserver observer = mDragIV.getViewTreeObserver();
-//        if (null != observer)
-//            observer.addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener() {
-//                @Override
-//                public void onGlobalLayout() {
-//
-//                }
-//            });
-
-
+        mWindowManager.addView(mWindowLayout, mWindowLayoutParams);
 
 
     }
-    private int getImageViewHeight(ImageView imageView) {
-        if (null == imageView)
-            return 0;
-        return imageView.getHeight() - imageView.getPaddingTop() - imageView.getPaddingBottom();
-    }
-    private int getImageViewWidth(ImageView imageView) {
-        if (null == imageView)
-            return 0;
-        return imageView.getWidth() - imageView.getPaddingLeft() - imageView.getPaddingRight();
-    }
+
+    Matrix mDrawMatrix = new Matrix();
+
+
     /**
      * 获取状态栏的高度
      *
@@ -449,5 +432,130 @@ public class TestImageView extends ImageView {
         }
         return statusHeight;
     }
+
+
+
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+
+
+
+        switch (event.getAction()) {
+            case MotionEvent.ACTION_DOWN:
+
+
+                mOffsetToTop = (int) (event.getRawY() - event.getX());
+                mOffsetToLeft = (int) (event.getRawX() - event.getY());
+
+
+                break;
+            case MotionEvent.ACTION_MOVE:
+
+                break;
+            case MotionEvent.ACTION_UP:
+
+                break;
+            case MotionEvent.ACTION_CANCEL:
+
+                break;
+            default:
+                break;
+        }
+        mGesture.onTouchEvent(event);
+
+        boolean res = false;
+
+
+        res = mScaleGesture.onTouchEvent(event);
+        return res;
+    }
+
+
+    public float getScale() {
+        //FloatMath
+        return (float) Math.sqrt((float) Math.pow(getValue(mSuppMatrix, Matrix.MSCALE_X), 2) + (float) Math.pow(getValue(mSuppMatrix, Matrix.MSKEW_Y), 2));
+    }
+
+    private final float[] mMatrixValues = new float[9];
+
+    private float getValue(Matrix matrix, int whichValue) {
+        matrix.getValues(mMatrixValues);
+        return mMatrixValues[whichValue];
+    }
+
+    public void show() {
+
+        setVisibility(View.VISIBLE);
+
+
+    }
+
+    private class AnimatedZoomRunnable implements Runnable {
+
+        private final float mFocalX, mFocalY;
+        private final long mStartTime;
+        private final float mZoomStartScale, mZoomEndScale;
+        private final float mTranslateDistanceX, mTranslateDistanceY;
+
+
+        public AnimatedZoomRunnable(final float currentZoom, final float targetZoom,
+                                    final float focalX, final float focalY, final float translateDistanceX, final float translateDistanceY) {
+            mFocalX = focalX;
+            mFocalY = focalY;
+            mStartTime = System.currentTimeMillis();
+            mZoomStartScale = currentZoom;
+            mZoomEndScale = targetZoom;
+            mTranslateDistanceX = translateDistanceX;
+            mTranslateDistanceY = translateDistanceY;
+
+            mWindowLayout.setBackgroundColor(Color.argb(0, 0, 0, 0));
+
+        }
+
+
+        @Override
+        public void run() {
+            ImageView imageView = mDragIV;
+            if (imageView == null) {
+                return;
+            }
+            float time = 1f * (System.currentTimeMillis() - mStartTime) / ZOOM_DURATION;
+            float t = mAnimInterpolator.getInterpolation(time);
+            float scales = mZoomStartScale + t * (mZoomEndScale - mZoomStartScale);
+
+            mSuppMatrix.reset();
+
+
+            mSuppMatrix.postScale(scales, scales, mFocalX, mFocalY);
+
+            float x = mTranslateDistanceX + t * (0 - mTranslateDistanceX);
+            float y = mTranslateDistanceY + t * (0 - mTranslateDistanceY);
+
+            mSuppMatrix.postTranslate(x, y);
+
+            mDrawMatrix.set(mBaseMatrix);
+            mDrawMatrix.postConcat(mSuppMatrix);
+
+            mDragIV.setImageMatrix(mDrawMatrix);
+
+            if (time < 0.8f) {
+                AnimCompat.postOnAnimation(imageView, this);
+
+
+            }
+
+            if (time >= 0.8f) {
+
+                show();
+                removeDragImage();
+
+
+            }
+
+        }
+
+
+    }
+
 
 }
