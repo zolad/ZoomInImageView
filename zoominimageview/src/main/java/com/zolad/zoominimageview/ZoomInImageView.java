@@ -1,4 +1,4 @@
-package com.example.zhonghm.opengllearnproject;
+package com.zolad.zoominimageview;
 
 import android.app.Activity;
 import android.content.Context;
@@ -19,9 +19,10 @@ import android.view.WindowManager;
 import android.view.animation.Interpolator;
 import android.widget.ImageView;
 
-import com.example.zhonghm.opengllearnproject.animation.AnimCompat;
-import com.example.zhonghm.opengllearnproject.animation.SpringInterpolator;
-import com.zolad.zoominimageview.R;
+import com.zolad.zoominimageview.animation.AnimCompat;
+import com.zolad.zoominimageview.animation.SpringInterpolator;
+import com.zolad.zoominimageview.window.WindowManagerUtil;
+
 
 /**
  * Created by zhonghm on 2018/6/27.
@@ -152,9 +153,14 @@ public class ZoomInImageView extends ImageView {
 
                 mSuppMatrix.reset();
 
+                // ZoomInImageView.this.getDrawable().getIntrinsicWidth()
 
-                float cx = mOffsetToLeft + mBitmap.getWidth() / 2.0f;
-                float cy = mOffsetToTop + mBitmap.getHeight() / 2.0f;
+
+                float cx = mOffsetToLeft +  ZoomInImageView.this.getWidth() / 2.0f;
+                float cy = mOffsetToTop +    ZoomInImageView.this.getHeight()/ 2.0f;
+
+                Log.e("ivdcheck",""+mOffsetToLeft+"  "+mOffsetToTop+" "+ZoomInImageView.this.getWidth()+" "+ZoomInImageView.this.getHeight());
+
                 if (mCurrentScale >= 1.0) {
                     mSuppMatrix.postScale(mCurrentScale, mCurrentScale, cx, cy);
 
@@ -166,7 +172,7 @@ public class ZoomInImageView extends ImageView {
                 }
                 disx = tx - LastX;
                 disy = ty - LastY;
-                mSuppMatrix.postTranslate(disx, disy);
+               mSuppMatrix.postTranslate(disx, disy);
                 //  mSuppMatrix.postScale(scale, scale);
                 mDrawMatrix.set(mBaseMatrix);
                 mDrawMatrix.postConcat(mSuppMatrix);
@@ -206,12 +212,14 @@ public class ZoomInImageView extends ImageView {
                 ZoomInImageView.this.setDrawingCacheEnabled(true);
                 // 从缓存中获取bitmap
                 mBitmap = Bitmap.createBitmap(ZoomInImageView.this.getDrawingCache());
+
+
+
                 // 释放绘图缓存，避免出现重复的缓存对象
                 ZoomInImageView.this.destroyDrawingCache();
 
 
                 showIv();
-                //   }
                 return true;
             }
 
@@ -303,7 +311,9 @@ public class ZoomInImageView extends ImageView {
      */
     private void removeDragImage() {
         if (mDragIV != null) {
-            mWindowManager.removeView(mWindowLayout);
+         //   mWindowManager.removeView(mWindowLayout);
+            mDragIV.setVisibility(View.INVISIBLE);
+            WindowManagerUtil.removeViewSafety(mWindowManager,mWindowLayout);
             mDragIV = null;
         }
 
@@ -330,7 +340,7 @@ public class ZoomInImageView extends ImageView {
      * @param downX  按下的点相对父控件的X坐标
      * @param downY  按下的点相对父控件的X坐标
      */
-    private void createDragImage(Bitmap bitmap, int downX, int downY) {
+    private synchronized void createDragImage(Bitmap bitmap, int downX, int downY) {
         mWindowLayoutParams = new WindowManager.LayoutParams();
         mWindowLayoutParams.format = PixelFormat.RGBA_8888; // 图片之外的其他地方透明
 
@@ -340,16 +350,15 @@ public class ZoomInImageView extends ImageView {
         mWindowLayoutParams.height = WindowManager.LayoutParams.MATCH_PARENT;
 
 
-        mWindowLayoutParams.type = WindowManager.LayoutParams.TYPE_TOAST;
+        mWindowLayoutParams.type = WindowManager.LayoutParams.TYPE_APPLICATION_PANEL;
 
 
-        mWindowLayout = LayoutInflater.from(this.getContext()).inflate(R.layout., null);
+        mWindowLayout = LayoutInflater.from(this.getContext()).inflate(R.layout.layout_zoominimage, null);
 
         mWindowLayout.setClickable(true);
 
-        mDragIV = (ImageView) mWindowLayout.findViewById(R.id.iv_pic);
+        mDragIV = (ImageView) mWindowLayout.findViewById(R.id.iv_zoominpic);
         mDragIV.setImageBitmap(bitmap);
-
 
 
         mBaseMatrix.reset();
@@ -371,16 +380,13 @@ public class ZoomInImageView extends ImageView {
 
         mSuppMatrix.reset();
         mBaseMatrix.postTranslate(mOffsetToLeft,
-                mOffsetToTop - getStatusHeight(this.getContext()));
-
+                mOffsetToTop);
+        // - getStatusHeight(this.getContext())
         mDrawMatrix.set(mBaseMatrix);
 
         mDragIV.setScaleType(ScaleType.MATRIX);
 
         mDragIV.setImageMatrix(mDrawMatrix);
-
-
-
 
 
         mWindowLayout.getViewTreeObserver().addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener() {
@@ -393,15 +399,14 @@ public class ZoomInImageView extends ImageView {
                         public void run() {
                             ZoomInImageView.this.setVisibility(View.INVISIBLE);// 隐藏该item
                         }
-                    }, 100);
+                    }, 300);
 
                 }
             }
         });
 
 
-        mWindowManager.addView(mWindowLayout, mWindowLayoutParams);
-
+        WindowManagerUtil.addViewSafety(mWindowManager,mWindowLayout,mWindowLayoutParams);
 
     }
 
@@ -434,18 +439,16 @@ public class ZoomInImageView extends ImageView {
     }
 
 
-
     @Override
     public boolean onTouchEvent(MotionEvent event) {
-
 
 
         switch (event.getAction()) {
             case MotionEvent.ACTION_DOWN:
 
 
-                mOffsetToTop = (int) (event.getRawY() - event.getX());
-                mOffsetToLeft = (int) (event.getRawX() - event.getY());
+                mOffsetToTop = (int) (event.getRawY() - event.getY());
+                mOffsetToLeft = (int) (event.getRawX() - event.getX());
 
 
                 break;
@@ -542,20 +545,24 @@ public class ZoomInImageView extends ImageView {
                 AnimCompat.postOnAnimation(imageView, this);
 
 
-            }
+            } else {
 
-            if (time >= 0.8f) {
-
-                show();
-                removeDragImage();
-
+                ZoomInImageView.this.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        show();
+                        removeDragImage();
+                    }
+                });
 
             }
 
         }
 
-
     }
+
+
+
 
 
 }

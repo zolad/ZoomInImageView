@@ -1,4 +1,4 @@
-package com.example.zhonghm.opengllearnproject.animation;
+package com.zolad.zoominimageview.animation;
 
 import android.os.Build;
 import android.view.View;
