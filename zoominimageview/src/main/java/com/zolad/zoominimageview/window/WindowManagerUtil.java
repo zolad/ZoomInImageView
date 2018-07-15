@@ -69,7 +69,7 @@ public class WindowManagerUtil {
         }
 
 
-        if (isAttachedToWindow(viewNeedAdd)) {
+        if (!isAttachedToWindow(viewNeedAdd)) {
 
             try {
                 windowManager.addView(viewNeedAdd, params);
@@ -89,7 +89,7 @@ public class WindowManagerUtil {
      */
     public static boolean isAttachedToWindow(View view) {
 
-        boolean isAlreadyAttach = false;
+        boolean isAlreadyAttach;
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
 
@@ -97,7 +97,7 @@ public class WindowManagerUtil {
 
         } else {
 
-            isAlreadyAttach = (view.getWindowToken() == null);
+            isAlreadyAttach = (view.getWindowToken() != null);
 
         }
 
