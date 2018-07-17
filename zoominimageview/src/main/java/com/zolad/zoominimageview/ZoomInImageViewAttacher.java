@@ -294,10 +294,10 @@ public class ZoomInImageViewAttacher implements View.OnTouchListener {
 
         if (mWindowLayoutParams == null || mWindowLayout == null) {
             mWindowLayoutParams = new WindowManager.LayoutParams();
-            mWindowLayoutParams.format = PixelFormat.RGBA_8888; // 图片之外的其他地方透明
+            mWindowLayoutParams.format = PixelFormat.RGBA_8888;
 
 
-            mWindowLayoutParams.alpha = 1f; // 透明度  0.55
+            mWindowLayoutParams.alpha = 1f;
             mWindowLayoutParams.width = WindowManager.LayoutParams.MATCH_PARENT;
             mWindowLayoutParams.height = WindowManager.LayoutParams.MATCH_PARENT;
 
@@ -336,7 +336,7 @@ public class ZoomInImageViewAttacher implements View.OnTouchListener {
                     getImageView().postDelayed(new Runnable() {
                         @Override
                         public void run() {
-                            getImageView().setVisibility(View.INVISIBLE);// 隐藏该item
+                            getImageView().setVisibility(View.INVISIBLE);
                         }
                     }, 300);
 

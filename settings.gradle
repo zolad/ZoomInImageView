@@ -1,1 +1,1 @@
-include ':sample', ':zoominimageview'
+include ':sample'
